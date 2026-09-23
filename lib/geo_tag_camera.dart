@@ -6,3 +6,4 @@ export 'src/permission_service.dart';
 export 'src/preview_page.dart';
 export 'src/sensor_overlay.dart';
 export 'src/settings_page.dart';
+export 'src/models/geo_image_object.dart';

@@ -5,8 +5,10 @@ import 'dart:math';
 import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geo_tag_camera/src/models/geo_image_object.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:logger/logger.dart';
 import 'package:sensors_plus/sensors_plus.dart';
 import 'package:permission_handler/permission_handler.dart';
 
@@ -29,10 +31,13 @@ class CameraPage extends StatefulWidget {
 class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   CameraController? _controller;
   List<CameraDescription>? _cameras;
-  int _cameraIndex = 0;
+  int _cameraIndex = 1;
   FlashMode _flashMode = FlashMode.off;
 
-  WatermarkSettings _watermarkSettings = const WatermarkSettings();
+  WatermarkSettings _watermarkSettings = const WatermarkSettings(
+    scale: 1.75,
+    timeFormat: WatermarkTimeFormat.format12Hour,
+  );
 
   bool _loading = true;
   bool _permissionDenied = false;
@@ -52,12 +57,14 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
   String _compassDirection = "N";
   StreamSubscription<MagnetometerEvent>? _magnetometerStream;
 
+  final logger = Logger(level: Level.debug);
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-    _init();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _init());
   }
 
   @override
@@ -112,6 +119,11 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     _startBackgroundSensors();
 
     _cameras = await availableCameras();
+    logger.d(_cameras);
+    final backCamera = _cameras?.where((camera) => camera.lensDirection == CameraLensDirection.front).toList();
+    if (backCamera != null || backCamera!.isNotEmpty) {
+      _cameraIndex = _cameras!.indexOf(backCamera.first);
+    }
     if (_cameras != null && _cameras!.isNotEmpty) {
       await _startCamera();
     } else {
@@ -228,6 +240,8 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
     try {
       final XFile file = await _controller!.takePicture();
 
+      _cachedLocation ??= await _fetchAndValidatePosition();
+
       final stamped = await GeoImageWatermark.stamp(
         imageFile: File(file.path),
         settings: _watermarkSettings,
@@ -238,10 +252,10 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
 
       if (!mounted) return;
 
-      final File? result = await Navigator.push(
+      final GeoImageObject? result = await Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) => PreviewPage(imageFile: stamped),
+          builder: (_) => PreviewPage(geoImageObject: stamped),
         ),
       );
 
@@ -271,6 +285,14 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
         _watermarkSettings = result;
       });
     }
+  }
+
+
+  Future<Position?> _fetchAndValidatePosition() async {
+    Position position = await Geolocator.getCurrentPosition(
+      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+    );
+    return position;
   }
 
   Widget _buildCameraPreview() {
@@ -303,8 +325,12 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
                       );
                       try {
                         _controller!.setExposurePoint(offset);
-                        _controller!.setFocusPoint(offset);
-                      } catch (_) {}
+                        _controller!.setFocusPoint(offset).catchError((error) {
+                          logger.e(error);
+                        });
+                      } catch (error) {
+                        logger.e(error);
+                      }
                     },
                     child: CameraPreview(_controller!),
                   );
@@ -392,14 +418,14 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
               onPressed: _isProcessing ? null : _switchCamera,
             ),
           ),
-          Positioned(
-            top: 40,
-            right: 60,
-            child: IconButton(
-              icon: const Icon(Icons.settings, color: Colors.white, size: 30),
-              onPressed: _isProcessing ? null : _openSettingsPage,
-            ),
-          ),
+          // Positioned(
+          //   top: 40,
+          //   right: 60,
+          //   child: IconButton(
+          //     icon: const Icon(Icons.settings, color: Colors.white, size: 30),
+          //     onPressed: _isProcessing ? null : _openSettingsPage,
+          //   ),
+          // ),
           Positioned(
             top: 40,
             right: 20,
@@ -417,16 +443,21 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
             bottom: 40,
             left: 0,
             right: 0,
-            child: Center(
-              child: FloatingActionButton(
-                onPressed: _isProcessing ? null : _capture,
-                backgroundColor: _isProcessing ? Colors.grey : Colors.white,
-                child: _isProcessing
-                    ? const Padding(
-                        padding: EdgeInsets.all(12.0),
-                        child: CircularProgressIndicator(color: Colors.black, strokeWidth: 3),
-                      )
-                    : const Icon(Icons.camera_alt, color: Colors.black),
+            child: SafeArea(
+              top: false,
+              left: false,
+              right: false,
+              child: Center(
+                child: FloatingActionButton(
+                  onPressed: _isProcessing ? null : _capture,
+                  backgroundColor: _isProcessing ? Colors.grey : Colors.white,
+                  child: _isProcessing
+                      ? const Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: CircularProgressIndicator(color: Colors.black, strokeWidth: 3),
+                        )
+                      : const Icon(Icons.camera_alt, color: Colors.black),
+                ),
               ),
             ),
           ),

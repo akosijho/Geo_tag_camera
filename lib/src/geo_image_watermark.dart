@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:geo_tag_camera/src/models/geo_image_object.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:intl/intl.dart';
@@ -12,7 +13,7 @@ import 'package:path_provider/path_provider.dart';
 import 'camera_settings.dart';
 
 class GeoImageWatermark {
-  static Future<File> stamp({
+  static Future<GeoImageObject> stamp({
     required File imageFile,
     required WatermarkSettings settings,
     required Position? cachedPosition,
@@ -168,6 +169,10 @@ class GeoImageWatermark {
 
     final List<TextSpan> spans = [];
 
+    spans.add(TextSpan(
+      text: '${spans.isNotEmpty ? '\n' : ''}🕒 $timeStr\n',
+    ));
+
     if (settings.showCoordinates) {
       spans.add(TextSpan(
         text: '📍 ${gps.latitude.toStringAsFixed(6)}, ${gps.longitude.toStringAsFixed(6)} ($compassDirection)',
@@ -176,10 +181,6 @@ class GeoImageWatermark {
         ),
       ));
     }
-
-    spans.add(TextSpan(
-      text: '${spans.isNotEmpty ? '\n' : ''}🕒 $timeStr',
-    ));
 
     if (settings.showAddress && address.isNotEmpty) {
       spans.add(TextSpan(
@@ -310,6 +311,11 @@ class GeoImageWatermark {
     
     await outputFile.writeAsBytes(byteData!.buffer.asUint8List());
 
-    return outputFile;
+    return GeoImageObject(
+      imageFile: outputFile,
+      position: cachedPosition,
+      compasDirection: compassDirection,
+      address: address,
+    );
   }
 }
