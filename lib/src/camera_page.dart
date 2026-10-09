@@ -289,10 +289,16 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
 
 
   Future<Position?> _fetchAndValidatePosition() async {
-    Position position = await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    );
-    return position;
+    try {
+      return await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 3),
+        ),
+      );
+    } catch (_) {
+      return await Geolocator.getLastKnownPosition();
+    }
   }
 
   Widget _buildCameraPreview() {

@@ -58,15 +58,36 @@ class GeoImageWatermark {
     );
 
     /// Use background cached location or fallback to fetching
-    Position gps = cachedPosition ?? await Geolocator.getCurrentPosition(
-      locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
-    );
-    String address = cachedAddress;
-    
-    if (address.isEmpty) {
+    Position? tempGps = cachedPosition;
+    if (tempGps == null) {
       try {
-        final place = (await placemarkFromCoordinates(gps.latitude, gps.longitude)).first;
-        address = '${place.subLocality ?? ''}, ${place.locality ?? ''}, ${place.administrativeArea ?? ''}';
+        tempGps = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(
+            accuracy: LocationAccuracy.high,
+            timeLimit: Duration(seconds: 3)
+          ),
+        );
+      } catch (_) {
+        tempGps = await Geolocator.getLastKnownPosition();
+      }
+    }
+
+    Position gps = tempGps ?? Position(
+      longitude: 0.0, latitude: 0.0, timestamp: DateTime.now(),
+      accuracy: 0.0, altitude: 0.0, heading: 0.0, speed: 0.0,
+      speedAccuracy: 0.0, altitudeAccuracy: 0.0, headingAccuracy: 0.0,
+    );
+
+    String address = cachedAddress;
+
+    if (address.isEmpty && gps.latitude != 0.0) {
+      try {
+        final placeList = await placemarkFromCoordinates(gps.latitude, gps.longitude)
+          .timeout(const Duration(seconds: 3));
+        if (placeList.isNotEmpty) {
+          final place = placeList.first;
+          address = '${place.subLocality ?? ''}, ${place.locality ?? ''}, ${place.administrativeArea ?? ''}';
+        }
       } catch (_) {}
     }
 
@@ -114,6 +135,7 @@ class GeoImageWatermark {
         final maxTy = (vpBottom ~/ 256);
 
         final client = HttpClient();
+        client.connectionTimeout = const Duration(seconds: 3);
         final futures = <Future<void>>[];
 
         for (int tx = minTx; tx <= maxTx; tx++) {
