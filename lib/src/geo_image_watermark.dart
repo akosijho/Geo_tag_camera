@@ -106,9 +106,9 @@ class GeoImageWatermark {
     
     String timeStr = '';
     try {
-      timeStr = DateFormat(fullDateFormatPattern).format(DateTime.now());
+      timeStr = DateFormat(fullDateFormatPattern).format(cachedPosition!.timestamp.toLocal());
     } catch (_) {
-      timeStr = DateFormat('dd/MM/yyyy HH:mm:ss').format(DateTime.now());
+      timeStr = DateFormat('dd/MM/yyyy HH:mm:ss').format(cachedPosition!.timestamp.toLocal());
     }
 
     var mapTiles = <(int, int, ui.Image)>[];
@@ -194,10 +194,26 @@ class GeoImageWatermark {
     spans.add(TextSpan(
       text: '${spans.isNotEmpty ? '\n' : ''}🕒 $timeStr\n',
     ));
+    
+    final lat = gps.latitude.toStringAsFixed(6);
+    final long = gps.longitude.toStringAsFixed(6);
 
+    Position position = Position(
+        longitude: double.parse(long),
+        latitude: double.parse(lat),
+        timestamp: cachedPosition.timestamp,
+        accuracy: cachedPosition.accuracy,
+        altitude: cachedPosition.altitude,
+        altitudeAccuracy: cachedPosition.altitudeAccuracy,
+        heading: cachedPosition.heading,
+        headingAccuracy: cachedPosition.headingAccuracy,
+        speed: cachedPosition.speed,
+        speedAccuracy: cachedPosition.speedAccuracy,
+    );
+    
     if (settings.showCoordinates) {
       spans.add(TextSpan(
-        text: '📍 ${gps.latitude.toStringAsFixed(6)}, ${gps.longitude.toStringAsFixed(6)} ($compassDirection)',
+        text: '📍 $lat, $long ($compassDirection)',
         style: TextStyle(
           fontWeight: settings.fontStyle == WatermarkFontStyle.bold ? FontWeight.w900 : FontWeight.bold,
         ),
@@ -330,12 +346,11 @@ class GeoImageWatermark {
 
     final dir = await getTemporaryDirectory();
     final outputFile = File('${dir.path}/geo_${DateTime.now().millisecondsSinceEpoch}.png');
-    
-    await outputFile.writeAsBytes(byteData!.buffer.asUint8List());
 
+    await outputFile.writeAsBytes(byteData!.buffer.asUint8List());
     return GeoImageObject(
       imageFile: outputFile,
-      position: cachedPosition,
+      position: position,
       compasDirection: compassDirection,
       address: address,
     );

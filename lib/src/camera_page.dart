@@ -249,7 +249,7 @@ class _CameraPageState extends State<CameraPage> with WidgetsBindingObserver {
         cachedAddress: _cachedAddress,
         compassDirection: _compassDirection,
       );
-
+      _cachedLocation = null;
       if (!mounted) return;
 
       final GeoImageObject? result = await Navigator.push(
